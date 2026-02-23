@@ -1,0 +1,74 @@
+name: Deploy to Docker Desktop Kubernetes (local)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, macOS]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tools
+        shell: bash
+        run: |
+          docker version
+          kubectl version --client=true
+          kubectl config get-contexts
+          kubectl config current-context
+
+      - name: Switch to Docker Desktop context
+        shell: bash
+        run: |
+          kubectl config use-context docker-desktop
+          kubectl get nodes
+
+      - name: Build local image
+        shell: bash
+        run: |
+          docker build -t ai-sentiment:local .
+
+      - name: Ensure Helm is available
+        shell: bash
+        run: |
+          if ! command -v helm >/dev/null 2>&1; then
+            echo "Installing Helm..."
+            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          fi
+          helm version
+
+      - name: Deploy with Helm (CI values)
+        shell: bash
+        run: |
+          # install or upgrade the chart using the local image and CI values
+          helm upgrade --install ai-sentiment charts/ai-sentiment \
+            -f charts/ai-sentiment/values-ci.yaml \
+            --set image.repository=ai-sentiment \
+            --set image.tag=local \
+            --wait --timeout 120s
+          # Wait for the deployment (uses release name as deployment name)
+          kubectl rollout status deployment/ai-sentiment --timeout=120s
+          kubectl get pods -o wide
+
+      - name: Health check service
+        shell: bash
+        run: |
+          # On Docker Desktop the NodePort is reachable on localhost
+          NODEPORT=30080
+          echo "Waiting for service on http://localhost:${NODEPORT}/health"
+          for i in {1..20}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${NODEPORT}/health || true)
+            if [ "$status" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: service not ready (status=$status). Retrying..."
+            sleep 3
+          done
+          echo "Health check failed"
+          kubectl describe pods --selector=app.kubernetes.io/name=ai-sentiment || true
+          exit 1

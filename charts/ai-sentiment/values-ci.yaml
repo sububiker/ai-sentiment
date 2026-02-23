@@ -1,0 +1,29 @@
+replicaCount: 1
+
+# Use local image built on the runner (Docker Desktop)
+image:
+  repository: ai-sentiment
+  tag: local
+  pullPolicy: Never
+
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30080
+
+# Probes (kept small for CI speed)
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 2
+  periodSeconds: 5
+
+resources: {}

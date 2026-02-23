@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ai-sentiment
+description: "A Helm chart for deploying the AI sentiment FastAPI application"
+version: 0.1.0
+appVersion: "1.0"

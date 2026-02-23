@@ -1,0 +1,9 @@
+# Common ignores
+.git
+.DS_Store
+.venv
+venv/
+__pycache__/
+*.pyc
+charts/
+README.md

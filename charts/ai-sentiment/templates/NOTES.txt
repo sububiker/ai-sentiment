@@ -1,0 +1,15 @@
+Thank you for installing ai-sentiment.
+
+Service Name: {{ include "ai-sentiment.fullname" . }}-svc
+
+1. If you are using a NodePort (default), access the app at:
+
+   http://<node-ip>:{{ .Values.service.nodePort }}
+
+2. To test the health endpoint from the cluster host:
+
+   curl http://<node-ip>:{{ .Values.service.nodePort }}/health
+
+3. To remove the release:
+
+   helm uninstall {{ .Release.Name }}

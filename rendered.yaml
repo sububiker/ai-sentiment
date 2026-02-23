@@ -1,0 +1,58 @@
+---
+# Source: ai-sentiment/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: release-name-svc
+spec:
+  selector:
+    app: ai-sentiment
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30080
+  type: NodePort
+---
+# Source: ai-sentiment/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: release-name
+  labels:
+    app.kubernetes.io/name: "ai-sentiment"
+    app.kubernetes.io/instance: "release-name"
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: "Helm"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-sentiment
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "ai-sentiment"
+        app.kubernetes.io/instance: "release-name"
+        app.kubernetes.io/version: "1.0"
+        app.kubernetes.io/managed-by: "Helm"
+        app: ai-sentiment
+    spec:
+      containers:
+        - name: ai-sentiment
+          image: "ai-sentiment:local"
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
