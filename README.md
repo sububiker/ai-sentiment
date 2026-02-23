@@ -33,4 +33,4 @@ The original manifest files have been archived under `k8s/archive/` for referenc
 
 ## Test
 curl http://localhost:30080/health
-curl http://localhost:30080/predict -H "Content-Type: application/json" -d '{"text":"i love this"}'
+curl http://localhost:30080/predict -H "Content-Type: application/json" -d '{"text":"i love this"}'# ai-sentiment
