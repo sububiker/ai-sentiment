@@ -35,6 +35,11 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/info")
+def info():
+    return {"model": "claude-opus-4-7", "backend": "anthropic", "version": "1.0"}
+
+
 @app.get("/", response_class=HTMLResponse)
 def ui():
     return """
