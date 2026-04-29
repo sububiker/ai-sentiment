@@ -7,17 +7,41 @@ from sklearn.linear_model import LogisticRegression
 
 app = FastAPI(title="Sample AI App (Sentiment)")
 
-# Tiny toy training set (demo)
+# Slightly expanded toy training set to cover common variants (demo)
 TRAIN_X = [
-    "i love this", "this is amazing", "so good", "fantastic experience",
-    "i hate this", "this is terrible", "so bad", "awful experience",
-    "very happy", "really enjoyed it", "very sad", "really disliked it"
+    # positive
+    "i love this",
+    "this is amazing",
+    "so good",
+    "fantastic experience",
+    "very happy",
+    "really enjoyed it",
+    "i like this",
+    "liked it",
+    # negative
+    "i hate this",
+    "this is terrible",
+    "so bad",
+    "awful experience",
+    "very sad",
+    "really disliked it",
+    "dislike",
+    "i dislike this",
+    "do not like",
+    "not good",
+    "i dislike it",
+    "totally dislike",
+    "dislike this a lot",
 ]
-TRAIN_Y = [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0]
+TRAIN_Y = [
+    1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+]
 
+# Use unigrams and bigrams to better capture short phrases and variants
 model: Pipeline = Pipeline([
-    ("tfidf", TfidfVectorizer()),
-    ("clf", LogisticRegression(max_iter=200)),
+    ("tfidf", TfidfVectorizer(ngram_range=(1, 2))),
+    ("clf", LogisticRegression(max_iter=500)),
 ])
 model.fit(TRAIN_X, TRAIN_Y)
 
@@ -84,5 +108,5 @@ def ui():
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
     proba_pos = float(model.predict_proba([req.text])[0][1])  # P(positive)
-    label = "positive" if proba_pos >= 0.5 else "negative"
+    label = "positive" if proba_pos > 0.5 else "negative"
     return {"label": label, "score": proba_pos}
