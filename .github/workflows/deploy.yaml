@@ -55,6 +55,12 @@ jobs:
           fi
           helm version
 
+      - name: Create Anthropic API key secret
+        run: |
+          kubectl create secret generic anthropic-secret \
+            --from-literal=api-key=${{ secrets.ANTHROPIC_API_KEY }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy with Helm (CI values)
         run: |
           helm upgrade --install ai-sentiment charts/ai-sentiment \

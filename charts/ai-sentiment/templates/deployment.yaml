@@ -21,6 +21,12 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 8080
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-secret
+                  key: api-key
           readinessProbe:
             httpGet:
               path: {{ .Values.readinessProbe.httpGet.path }}
