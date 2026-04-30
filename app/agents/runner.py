@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 
 import anthropic
 from mcp import ClientSession, StdioServerParameters
@@ -27,6 +28,26 @@ from models.schemas import PredictResponse
 logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 10
+
+
+def _parse_response(text: str) -> dict:
+    """Extract JSON from Claude's response, handling prose wrappers or empty strings."""
+    text = text.strip()
+    if not text:
+        raise ValueError("Claude returned an empty response")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Claude sometimes wraps JSON in markdown fences or prose — find the first {...}
+    match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"Could not parse Claude response as JSON: {text[:300]}")
+
 
 # Absolute paths so subprocesses can be found inside the Docker container
 _APP_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -137,7 +158,7 @@ async def _run_agent_async(
                 )
                 if text_block is None:
                     raise ValueError("Agent returned no final text block")
-                result = json.loads(text_block.text)
+                result = _parse_response(text_block.text)
                 logger.info(
                     "Agent done: label=%s score=%.3f tools=%s",
                     result["label"], result["score"], tools_called,

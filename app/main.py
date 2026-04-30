@@ -84,8 +84,12 @@ def ui():
                         body: JSON.stringify({ text })
                     });
                     if (!res.ok) {
-                        const err = await res.json();
-                        throw new Error(err.detail || res.statusText);
+                        let detail = res.statusText;
+                        try {
+                            const err = await res.json();
+                            detail = err.detail || detail;
+                        } catch (_) {}
+                        throw new Error(detail);
                     }
                     const d = await res.json();
                     const labelClass = d.label === 'positive' ? 'positive' : 'negative';
