@@ -7,7 +7,8 @@ from fastapi.responses import HTMLResponse
 
 from config import settings
 from models.schemas import PredictRequest, PredictResponse
-from agents.pipeline import run_pipeline
+from agents.runner import run_agent
+from tools.history import init_db, store_result
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,8 +16,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AI Sentiment Agent", version="2.0.0")
+app = FastAPI(title="AI Sentiment Agent", version="3.0.0")
 _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+init_db()
 
 
 @app.get("/health")
@@ -29,9 +32,9 @@ def info():
     return {
         "model": settings.model,
         "backend": "anthropic",
-        "version": "2.0.0",
-        "pipeline": ["fetch", "analyze", "reflect"],
-        "reflection_band": [settings.reflection_low, settings.reflection_high],
+        "version": "3.0.0",
+        "mode": "fully-agentic",
+        "tools": ["fetch_url", "search_web", "analyze_history"],
     }
 
 
@@ -48,16 +51,18 @@ def ui():
                 textarea { width: 100%; height: 100px; }
                 button { padding: 8px 20px; margin-top: 8px; }
                 .result { margin-top: 1rem; padding: 1rem; border: 1px solid #ddd; background: #f9f9f9; }
-                .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+                .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; margin-left: 4px; }
                 .positive { background: #d4edda; color: #155724; }
                 .negative { background: #f8d7da; color: #721c24; }
-                .tag { background: #e2e3e5; color: #383d41; margin-left: 6px; }
+                .tool  { background: #cce5ff; color: #004085; }
+                .meta  { color: #666; font-size: 0.85rem; margin-top: 8px; }
             </style>
         </head>
         <body>
             <h1>AI Sentiment Agent</h1>
-            <p>Enter plain text <strong>or paste a URL</strong> — the agent will fetch and analyze it.</p>
-            <textarea id="text" placeholder="Type a sentence, or paste https://..."></textarea>
+            <p>Enter plain text, a <strong>URL</strong>, or a research question like
+               <em>"Has sentiment about Tesla improved this month?"</em></p>
+            <textarea id="text" placeholder="Type text, paste a URL, or ask a question..."></textarea>
             <div><button id="btn">Analyze</button></div>
             <div id="out" class="result" style="display:none"></div>
 
@@ -69,7 +74,7 @@ def ui():
                 const text = document.getElementById('text').value.trim();
                 if (!text) return;
                 out.style.display = 'block';
-                out.innerHTML = '<em>Analyzing...</em>';
+                out.innerHTML = '<em>Agent is thinking — may use tools...</em>';
                 btn.disabled = true;
 
                 try {
@@ -84,14 +89,17 @@ def ui():
                     }
                     const d = await res.json();
                     const labelClass = d.label === 'positive' ? 'positive' : 'negative';
+                    const toolBadges = d.tools_called.map(t =>
+                        `<span class="badge tool">${t}</span>`).join('');
                     out.innerHTML = `
                         <strong>Label:</strong>
                         <span class="badge ${labelClass}">${d.label}</span>
-                        ${d.reflected ? '<span class="badge tag">reflected</span>' : ''}
-                        ${d.source === 'url' ? '<span class="badge tag">from URL</span>' : ''}
+                        ${toolBadges}
                         <br/><br/>
                         <strong>Score:</strong> ${d.score.toFixed(3)}<br/>
                         <strong>Reasoning:</strong> ${d.reasoning}
+                        <div class="meta">Source: ${d.source} &nbsp;|&nbsp;
+                        Tools used: ${d.tools_called.length > 0 ? d.tools_called.join(' → ') : 'none (direct answer)'}</div>
                     `;
                 } catch (err) {
                     out.innerHTML = '<span style="color:red">Error: ' + err.message + '</span>';
@@ -108,7 +116,15 @@ def ui():
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
     try:
-        return run_pipeline(_client, req.text)
+        result = run_agent(_client, req.text)
+        store_result(
+            text=req.text,
+            label=result.label,
+            score=result.score,
+            reasoning=result.reasoning,
+            source=result.source,
+        )
+        return result
     except httpx.HTTPStatusError as exc:
         logger.warning("URL fetch failed: %s", exc)
         raise HTTPException(
@@ -122,8 +138,8 @@ def predict(req: PredictRequest):
         logger.error("Claude API error: %s", exc)
         raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
     except ValueError as exc:
-        logger.error("Pipeline value error: %s", exc)
+        logger.error("Agent error: %s", exc)
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        logger.error("Unexpected pipeline error: %s", exc, exc_info=True)
+        logger.error("Unexpected error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
